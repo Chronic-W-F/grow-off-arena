@@ -7,12 +7,13 @@ import { doc, setDoc, collection, serverTimestamp } from "firebase/firestore";
 
 export default function CreateArenaPage() {
   const router = useRouter();
-  const user = auth.currentUser;
+  const user = auth.currentUser; // okay to use for render
 
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Render guard – if no user, show message
   if (!user) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
@@ -29,19 +30,28 @@ export default function CreateArenaPage() {
     setLoading(true);
 
     try {
+      // Grab currentUser inside the handler so TS can narrow it properly
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        setError("Your session expired. Please log in again.");
+        setLoading(false);
+        return;
+      }
+
       // Create a new arena document with a generated ID
       const arenaRef = doc(collection(db, "arenas"));
       const arenaId = arenaRef.id;
 
       await setDoc(arenaRef, {
         name,
-        ownerId: user.uid,
-        ownerEmail: user.email ?? null,
+        ownerId: currentUser.uid,
+        ownerEmail: currentUser.email ?? null,
         createdAt: serverTimestamp(),
       });
 
       // Give the creator organizer role in this arena
-      await setDoc(doc(db, "arenas", arenaId, "roles", user.uid), {
+      await setDoc(doc(db, "arenas", arenaId, "roles", currentUser.uid), {
         role: "organizer",
         createdAt: serverTimestamp(),
       });
