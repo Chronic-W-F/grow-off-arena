@@ -8,6 +8,7 @@ import {
   doc,
   getDoc,
   collection,
+  getDocs,
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -22,7 +23,7 @@ type CompetitionDoc = {
   id: string;
   name?: string;
   status?: string;
-  createdAt?: any;
+  createdAt?: any; // Firestore Timestamp
 };
 
 export default function ArenaPage() {
@@ -37,14 +38,13 @@ export default function ArenaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // competitions in this arena
   const [competitions, setCompetitions] = useState<CompetitionDoc[]>([]);
   const [loadingComps, setLoadingComps] = useState(true);
 
-  // invite status
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
 
+  // Load arena details
   useEffect(() => {
     async function loadArena() {
       if (!arenaId) return;
@@ -69,16 +69,19 @@ export default function ArenaPage() {
     loadArena();
   }, [arenaId]);
 
+  // Load competitions for this arena
   useEffect(() => {
     async function loadCompetitions() {
       if (!arenaId) return;
       setLoadingComps(true);
 
       try {
-        // competitions subcollection under this arena
-        const { getDocs, collection as col } = await import("firebase/firestore");
-
-        const compsRef = col(db, "arenas", String(arenaId), "competitions");
+        const compsRef = collection(
+          db,
+          "arenas",
+          String(arenaId),
+          "competitions"
+        );
         const snap = await getDocs(compsRef);
 
         const list: CompetitionDoc[] = snap.docs.map((d) => ({
@@ -88,7 +91,7 @@ export default function ArenaPage() {
 
         setCompetitions(list);
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load competitions:", err);
       } finally {
         setLoadingComps(false);
       }
@@ -97,8 +100,10 @@ export default function ArenaPage() {
     loadCompetitions();
   }, [arenaId]);
 
+  // Create invite and copy link
   async function handleCreateInvite(role: "judge" | "participant") {
     if (!arenaId) return;
+
     try {
       setInviteLoading(true);
       setInviteMessage(null);
@@ -106,7 +111,7 @@ export default function ArenaPage() {
       const invitesRef = collection(db, "invites");
       const inviteDoc = await addDoc(invitesRef, {
         arenaId: String(arenaId),
-        competitionId: null, // later we can make competition-specific invites
+        competitionId: null, // later we can target specific competitions
         role,
         status: "pending",
         maxUses: 100,
@@ -118,23 +123,23 @@ export default function ArenaPage() {
         typeof window !== "undefined" ? window.location.origin : "";
       const url = `${origin}/join/${inviteDoc.id}`;
 
-      if (navigator.clipboard && navigator.clipboard.writeText) {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
         setInviteMessage(
           `Copied ${role} invite link to your clipboard. Paste it to share.`
         );
       } else {
-        setInviteMessage(
-          `Invite link created: ${url}`
-        );
+        setInviteMessage(`Invite link created: ${url}`);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to create invite link:", err);
       setInviteMessage("Failed to create invite link. Try again.");
     } finally {
       setInviteLoading(false);
     }
   }
+
+  // ---------- Loading & error states ----------
 
   if (loading) {
     return (
@@ -163,9 +168,12 @@ export default function ArenaPage() {
     );
   }
 
+  // ---------- Normal render ----------
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
       <div className="max-w-4xl w-full px-6 py-10">
+        {/* Arena header */}
         <p className="text-xs text-slate-500 mb-2">
           Arena ID: {String(arenaId)}
         </p>
@@ -189,6 +197,7 @@ export default function ArenaPage() {
           </ul>
         </div>
 
+        {/* Primary actions */}
         <div className="flex flex-wrap gap-3 mb-8">
           <Link
             href={`/arena/${String(arenaId)}/competitions/create`}
@@ -206,7 +215,9 @@ export default function ArenaPage() {
 
         {/* Invite section */}
         <section className="mb-10 border border-slate-800 bg-slate-900/40 rounded-xl px-4 py-4">
-          <h2 className="text-sm font-semibold mb-2">Invite people to this arena</h2>
+          <h2 className="text-sm font-semibold mb-2">
+            Invite people to this arena
+          </h2>
           <p className="text-xs text-slate-400 mb-3">
             Generate a link and paste it to your judges or growers. When they
             sign in with that link, they&apos;ll be added to this arena with the
@@ -229,7 +240,9 @@ export default function ArenaPage() {
             </button>
           </div>
           {inviteMessage && (
-            <p className="mt-3 text-[11px] text-slate-400">{inviteMessage}</p>
+            <p className="mt-3 text-[11px] text-slate-400">
+              {inviteMessage}
+            </p>
           )}
         </section>
 
@@ -249,11 +262,13 @@ export default function ArenaPage() {
               {competitions.map((comp) => {
                 const created =
                   comp.createdAt && comp.createdAt.toDate
-                    ? comp.createdAt.toDate().toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })
+                    ? comp.createdAt
+                        .toDate()
+                        .toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })
                     : null;
 
                 return (
