@@ -63,7 +63,22 @@ export default function DashboardPage() {
           </ul>
         </div>
 
-        <div className="mt-6 flex gap-3">
+        {/* Arenas section */}
+        <div className="mt-10">
+          <h2 className="text-xl font-semibold mb-3">Your Arenas</h2>
+          <p className="text-slate-400 text-sm mb-4">
+            You don’t have any arenas yet.
+          </p>
+
+          <Link
+            href="/create-arena"
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 transition"
+          >
+            Create New Arena
+          </Link>
+        </div>
+
+        <div className="mt-6">
           <Link
             href="/"
             className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-medium hover:border-emerald-400 hover:text-emerald-300 transition"
