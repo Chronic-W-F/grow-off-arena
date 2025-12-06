@@ -67,7 +67,6 @@ export default function CreateCompetitionPage() {
         "competitions"
       );
 
-      // Check for duplicate competition names (active, draft, upcoming)
       const q = query(
         compsRef,
         where("slug", "==", slug),
@@ -84,15 +83,14 @@ export default function CreateCompetitionPage() {
         return;
       }
 
-      // Create the new competition
       const newRef = doc(compsRef);
       await setDoc(newRef, {
         name,
         slug,
         status: "draft",
         createdAt: serverTimestamp(),
-        ownerId: user.uid,
-        ownerEmail: user.email ?? null,
+        ownerId: user!.uid,
+        ownerEmail: user!.email ?? null,
       });
 
       router.push(`/arena/${String(arenaId)}/competitions/${newRef.id}`);
