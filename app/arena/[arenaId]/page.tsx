@@ -8,10 +8,8 @@ import {
   doc,
   getDoc,
   collection,
-  query,
-  where,
-  getDocs,
-  updateDoc,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 
 type ArenaDoc = {
@@ -24,7 +22,7 @@ type CompetitionDoc = {
   id: string;
   name?: string;
   status?: string;
-  createdAt?: any; // Firestore Timestamp or undefined
+  createdAt?: any;
 };
 
 export default function ArenaPage() {
@@ -36,98 +34,109 @@ export default function ArenaPage() {
     : "";
 
   const [arena, setArena] = useState<ArenaDoc | null>(null);
-  const [loadingArena, setLoadingArena] = useState(true);
-  const [arenaError, setArenaError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // competitions in this arena
   const [competitions, setCompetitions] = useState<CompetitionDoc[]>([]);
   const [loadingComps, setLoadingComps] = useState(true);
-  const [compsError, setCompsError] = useState<string | null>(null);
-  const [archivingId, setArchivingId] = useState<string | null>(null);
+
+  // invite status
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   useEffect(() => {
-    if (!arenaId) return;
-
-    async function loadData() {
-      setLoadingArena(true);
-      setLoadingComps(true);
-      setArenaError(null);
-      setCompsError(null);
+    async function loadArena() {
+      if (!arenaId) return;
 
       try {
-        // 1) Load arena doc
-        const arenaRef = doc(db, "arenas", String(arenaId));
-        const arenaSnap = await getDoc(arenaRef);
+        const ref = doc(db, "arenas", String(arenaId));
+        const snap = await getDoc(ref);
 
-        if (!arenaSnap.exists()) {
-          setArenaError("This arena does not exist.");
-          setLoadingArena(false);
-          setLoadingComps(false);
-          return;
+        if (!snap.exists()) {
+          setError("This arena does not exist.");
+        } else {
+          setArena(snap.data() as ArenaDoc);
         }
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load arena.");
+      } finally {
+        setLoading(false);
+      }
+    }
 
-        setArena(arenaSnap.data() as ArenaDoc);
-        setLoadingArena(false);
+    loadArena();
+  }, [arenaId]);
 
-        // 2) Load competitions for this arena (exclude archived)
-        const compsRef = collection(
-          db,
-          "arenas",
-          String(arenaId),
-          "competitions"
-        );
+  useEffect(() => {
+    async function loadCompetitions() {
+      if (!arenaId) return;
+      setLoadingComps(true);
 
-        const q = query(
-          compsRef,
-          where("status", "in", ["draft", "upcoming", "active", "completed"])
-        );
+      try {
+        // competitions subcollection under this arena
+        const { getDocs, collection as col } = await import("firebase/firestore");
 
-        const compsSnap = await getDocs(q);
-        const list: CompetitionDoc[] = compsSnap.docs.map((d) => ({
+        const compsRef = col(db, "arenas", String(arenaId), "competitions");
+        const snap = await getDocs(compsRef);
+
+        const list: CompetitionDoc[] = snap.docs.map((d) => ({
           id: d.id,
           ...(d.data() as Omit<CompetitionDoc, "id">),
         }));
 
         setCompetitions(list);
-        setLoadingComps(false);
       } catch (err) {
         console.error(err);
-        setArenaError((prev) => prev ?? "Failed to load arena.");
-        setCompsError("Failed to load competitions.");
-        setLoadingArena(false);
+      } finally {
         setLoadingComps(false);
       }
     }
 
-    loadData();
+    loadCompetitions();
   }, [arenaId]);
 
-  async function handleArchiveCompetition(id: string) {
+  async function handleCreateInvite(role: "judge" | "participant") {
     if (!arenaId) return;
-
     try {
-      setArchivingId(id);
-      const compRef = doc(
-        db,
-        "arenas",
-        String(arenaId),
-        "competitions",
-        String(id)
-      );
-      await updateDoc(compRef, { status: "archived" });
+      setInviteLoading(true);
+      setInviteMessage(null);
 
-      // Remove from UI list
-      setCompetitions((prev) => prev.filter((c) => c.id !== id));
+      const invitesRef = collection(db, "invites");
+      const inviteDoc = await addDoc(invitesRef, {
+        arenaId: String(arenaId),
+        competitionId: null, // later we can make competition-specific invites
+        role,
+        status: "pending",
+        maxUses: 100,
+        usedCount: 0,
+        createdAt: serverTimestamp(),
+      });
+
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : "";
+      const url = `${origin}/join/${inviteDoc.id}`;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        setInviteMessage(
+          `Copied ${role} invite link to your clipboard. Paste it to share.`
+        );
+      } else {
+        setInviteMessage(
+          `Invite link created: ${url}`
+        );
+      }
     } catch (err) {
-      console.error("Failed to archive competition:", err);
-      alert("Failed to archive competition.");
+      console.error(err);
+      setInviteMessage("Failed to create invite link. Try again.");
     } finally {
-      setArchivingId(null);
+      setInviteLoading(false);
     }
   }
 
-  // ---------- Loading & error states for arena ----------
-
-  if (loadingArena) {
+  if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
         <p className="text-slate-400 text-sm">Loading arena…</p>
@@ -135,13 +144,13 @@ export default function ArenaPage() {
     );
   }
 
-  if (arenaError || !arena) {
+  if (error || !arena) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
         <div className="text-center space-y-4">
           <h1 className="text-2xl font-semibold">Arena not found</h1>
           <p className="text-slate-400 text-sm">
-            {arenaError ?? "We couldn&apos;t find this arena."}
+            {error ?? "We couldn&apos;t find this arena."}
           </p>
           <Link
             href="/dashboard"
@@ -154,96 +163,109 @@ export default function ArenaPage() {
     );
   }
 
-  // ---------- Normal render ----------
-
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
-      <div className="max-w-3xl w-full px-6 py-10 space-y-8">
-        {/* Arena header */}
-        <section>
-          <p className="text-xs text-slate-500 mb-2">
-            Arena ID: {String(arenaId)}
-          </p>
-          <h1 className="text-3xl font-semibold mb-2">
-            {arena.name ?? "Untitled Arena"}
-          </h1>
-          <p className="text-slate-400 text-sm mb-6">
-            Organizer:{" "}
-            <span className="font-mono">
-              {arena.ownerEmail ?? arena.ownerId ?? "Unknown"}
-            </span>
-          </p>
+      <div className="max-w-4xl w-full px-6 py-10">
+        <p className="text-xs text-slate-500 mb-2">
+          Arena ID: {String(arenaId)}
+        </p>
+        <h1 className="text-3xl font-semibold mb-2">
+          {arena.name ?? "Untitled Arena"}
+        </h1>
+        <p className="text-slate-400 text-sm mb-6">
+          Organizer:{" "}
+          <span className="font-mono">
+            {arena.ownerEmail ?? arena.ownerId ?? "Unknown"}
+          </span>
+        </p>
 
-          <div className="space-y-3 text-sm text-slate-300">
-            <p>This will be the control center for this arena.</p>
-            <ul className="list-disc list-inside text-slate-400 space-y-1">
-              <li>Create and manage grow-off competitions</li>
-              <li>Add judges and define scoring categories</li>
-              <li>Invite growers to join this arena</li>
-              <li>View leaderboards and check-ins</li>
-            </ul>
-          </div>
+        <div className="space-y-3 text-sm text-slate-300 mb-8">
+          <p>This will be the control center for this arena.</p>
+          <ul className="list-disc list-inside text-slate-400 space-y-1">
+            <li>Create and manage grow-off competitions</li>
+            <li>Add judges and define scoring categories</li>
+            <li>Invite growers to join this arena</li>
+            <li>View leaderboards and check-ins</li>
+          </ul>
+        </div>
 
-          <div className="mt-8 flex gap-3">
-            <Link
-              href={`/arena/${String(arenaId)}/competitions/create`}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-medium text-white transition"
+        <div className="flex flex-wrap gap-3 mb-8">
+          <Link
+            href={`/arena/${String(arenaId)}/competitions/create`}
+            className="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-medium text-white transition"
+          >
+            Start a competition
+          </Link>
+          <Link
+            href="/dashboard"
+            className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-medium hover:border-emerald-400 hover:text-emerald-300 transition"
+          >
+            Back to dashboard
+          </Link>
+        </div>
+
+        {/* Invite section */}
+        <section className="mb-10 border border-slate-800 bg-slate-900/40 rounded-xl px-4 py-4">
+          <h2 className="text-sm font-semibold mb-2">Invite people to this arena</h2>
+          <p className="text-xs text-slate-400 mb-3">
+            Generate a link and paste it to your judges or growers. When they
+            sign in with that link, they&apos;ll be added to this arena with the
+            correct role.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => handleCreateInvite("judge")}
+              disabled={inviteLoading}
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium hover:border-emerald-400 hover:text-emerald-300 transition disabled:opacity-60"
             >
-              Start a competition
-            </Link>
-            <Link
-              href="/dashboard"
-              className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-medium hover:border-emerald-400 hover:text-emerald-300 transition"
+              {inviteLoading ? "Working…" : "Copy judge invite link"}
+            </button>
+            <button
+              onClick={() => handleCreateInvite("participant")}
+              disabled={inviteLoading}
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium hover:border-emerald-400 hover:text-emerald-300 transition disabled:opacity-60"
             >
-              Back to dashboard
-            </Link>
+              {inviteLoading ? "Working…" : "Copy participant invite link"}
+            </button>
           </div>
+          {inviteMessage && (
+            <p className="mt-3 text-[11px] text-slate-400">{inviteMessage}</p>
+          )}
         </section>
 
         {/* Competitions list */}
         <section>
-          <h2 className="text-xl font-semibold mb-3">
+          <h2 className="text-sm font-semibold mb-3">
             Competitions in this arena
           </h2>
-
-          {loadingComps && (
-            <p className="text-slate-400 text-sm">Loading competitions…</p>
-          )}
-
-          {compsError && !loadingComps && (
-            <p className="text-red-400 text-sm">{compsError}</p>
-          )}
-
-          {!loadingComps && !compsError && competitions.length === 0 && (
-            <p className="text-slate-500 text-sm">
-              No active competitions yet. Start one above.
+          {loadingComps ? (
+            <p className="text-xs text-slate-500">Loading competitions…</p>
+          ) : competitions.length === 0 ? (
+            <p className="text-xs text-slate-500">
+              No competitions yet. Start one above.
             </p>
-          )}
-
-          {!loadingComps && competitions.length > 0 && (
-            <ul className="space-y-3 mt-2">
+          ) : (
+            <ul className="space-y-2">
               {competitions.map((comp) => {
                 const created =
                   comp.createdAt && comp.createdAt.toDate
-                    ? comp.createdAt
-                        .toDate()
-                        .toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })
+                    ? comp.createdAt.toDate().toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })
                     : null;
 
                 return (
                   <li
                     key={comp.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3"
+                    className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 text-xs"
                   >
                     <div>
-                      <p className="font-medium">
+                      <p className="font-medium text-sm">
                         {comp.name ?? "Untitled competition"}
                       </p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-[11px] text-slate-500">
                         Status:{" "}
                         <span className="capitalize">
                           {comp.status ?? "unknown"}
@@ -251,14 +273,6 @@ export default function ArenaPage() {
                         {created && <> · Created {created}</>}
                       </p>
                     </div>
-
-                    <button
-                      onClick={() => handleArchiveCompetition(comp.id)}
-                      disabled={archivingId === comp.id}
-                      className="rounded-md border border-slate-700 px-3 py-1 text-xs font-medium text-slate-200 hover:border-amber-400 hover:text-amber-300 transition disabled:opacity-50"
-                    >
-                      {archivingId === comp.id ? "Archiving…" : "Archive"}
-                    </button>
                   </li>
                 );
               })}
