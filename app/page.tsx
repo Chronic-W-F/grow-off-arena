@@ -1,23 +1,49 @@
-export default function Home() {
+import Link from "next/link";
+
+export default function HomePage() {
   return (
-    <main className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center px-6">
-      <h1 className="text-4xl md:text-6xl font-bold mb-6 text-emerald-400">
-        Grow-Off Arena
-      </h1>
+    <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <div className="max-w-3xl w-full px-6 py-10">
+        <h1 className="text-3xl sm:text-4xl font-semibold mb-3">
+          Grow-Off Arena
+        </h1>
+        <p className="text-slate-400 mb-8">
+          Host and join competitive cannabis grow-offs with scoring, check-ins,
+          and leaderboards. Multi-tenant, so each organizer gets their own
+          arena.
+        </p>
 
-      <p className="text-lg md:text-xl text-center max-w-2xl text-neutral-300 mb-10">
-        A multi-tenant platform for hosting cannabis grow competitions. Organizers run
-        events, growers submit plant updates, judges score plants, and the leaderboard
-        updates in real time.
-      </p>
+        <div className="flex flex-wrap gap-3">
+          {/* Go to dashboard */}
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 transition"
+          >
+            Open Dashboard
+          </Link>
 
-      <div className="flex gap-4">
-        <button className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-semibold">
-          Dashboard (coming soon)
-        </button>
-        <button className="px-6 py-3 bg-neutral-800 hover:bg-neutral-700 rounded-xl font-semibold">
-          View competitions
-        </button>
+          {/* View competitions list */}
+          <Link
+            href="/competitions"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium hover:border-emerald-400 hover:text-emerald-300 transition"
+          >
+            View Competitions
+          </Link>
+
+          {/* Auth page */}
+          <Link
+            href="/auth"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium hover:border-emerald-400 hover:text-emerald-300 transition"
+          >
+            Sign in / Sign up
+          </Link>
+        </div>
+
+        <p className="mt-6 text-xs text-slate-500">
+          Note: Dashboard features and competition management are still being
+          built out. For now, you can sign in and we&apos;ll start wiring your
+          arenas and grow-offs.
+        </p>
       </div>
     </main>
   );
