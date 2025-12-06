@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, type User, signOut } from "firebase/auth";
+import { onAuthStateChanged, type User } from "firebase/auth";
 import Link from "next/link";
 
 export default function DashboardPage() {
@@ -28,3 +28,56 @@ export default function DashboardPage() {
   if (!user) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-semibold mb-2">Grow-Off Arena</h1>
+          <p className="text-slate-400 text-sm">
+            You&apos;re not signed in. Log in to access your dashboard.
+          </p>
+          <Link
+            href="/auth"
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 transition"
+          >
+            Go to Sign in / Sign up
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <div className="max-w-3xl w-full px-6 py-10">
+        <h1 className="text-3xl font-semibold mb-3">Dashboard</h1>
+        <p className="text-slate-400 mb-4 text-sm">
+          Logged in as <span className="font-mono">{user.email}</span>
+        </p>
+
+        <div className="space-y-3 text-sm">
+          <p className="text-slate-300">
+            This is the start of your Grow-Off Arena. Next step is wiring:
+          </p>
+          <ul className="list-disc list-inside text-slate-400 space-y-1">
+            <li>Your organizer &amp; judge roles per arena</li>
+            <li>Creating grow-off competitions inside each arena</li>
+            <li>“My Competitions” view for growers</li>
+          </ul>
+        </div>
+
+        <div className="mt-6 flex gap-3">
+          <Link
+            href="/"
+            className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-medium hover:border-emerald-400 hover:text-emerald-300 transition"
+          >
+            Back to home
+          </Link>
+          <Link
+            href="/competitions"
+            className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-medium hover:border-emerald-400 hover:text-emerald-300 transition"
+          >
+            View competitions (placeholder)
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
