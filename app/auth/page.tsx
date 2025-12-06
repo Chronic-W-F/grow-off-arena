@@ -1,21 +1,24 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { useRouter } from "next/navigation";
 
 export default function AuthPage() {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
+
+  const [mode, setMode] = useState<"login" | "signup">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -25,55 +28,59 @@ export default function AuthPage() {
     try {
       if (mode === "signup") {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
-        await setDoc(doc(db, "users", cred.user.uid), {
-          email,
-          createdAt: serverTimestamp(),
-        });
+
+        // Optional: store basic user profile
+        const userRef = doc(db, "users", cred.user.uid);
+        await setDoc(
+          userRef,
+          {
+            email,
+            createdAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
 
-      router.push("/dashboard");
+      router.push(next || "/dashboard");
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || "Something went wrong");
+      setError(err.message ?? "Authentication failed.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/70 p-8 shadow-xl">
-        <h1 className="text-2xl font-semibold mb-2 text-center">
+    <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <div className="max-w-md w-full px-6 py-10">
+        <h1 className="text-2xl font-semibold mb-4 text-center">
           Grow-Off Arena
         </h1>
-        <p className="text-sm text-slate-400 mb-6 text-center">
-          {mode === "login"
-            ? "Log in to your grow-off account"
-            : "Create an account to join grow competitions"}
+        <p className="text-slate-400 text-sm mb-6 text-center">
+          {mode === "signup"
+            ? "Create an account to host or join grow competitions."
+            : "Sign in to access your arenas and competitions."}
         </p>
 
-        <div className="flex justify-center gap-2 mb-6 text-sm">
+        <div className="flex justify-center gap-2 mb-6">
           <button
-            type="button"
             onClick={() => setMode("login")}
-            className={`px-3 py-1 rounded-full border ${
+            className={`px-3 py-1 text-xs rounded-full border ${
               mode === "login"
-                ? "border-emerald-400 bg-emerald-500/10"
-                : "border-slate-700"
+                ? "bg-slate-100 text-slate-900 border-slate-100"
+                : "border-slate-700 text-slate-400"
             }`}
           >
             Log in
           </button>
-
           <button
-            type="button"
             onClick={() => setMode("signup")}
-            className={`px-3 py-1 rounded-full border ${
+            className={`px-3 py-1 text-xs rounded-full border ${
               mode === "signup"
-                ? "border-emerald-400 bg-emerald-500/10"
-                : "border-slate-700"
+                ? "bg-slate-100 text-slate-900 border-slate-100"
+                : "border-slate-700 text-slate-400"
             }`}
           >
             Sign up
@@ -81,61 +88,53 @@ export default function AuthPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm mb-1" htmlFor="email">
-              Email
-            </label>
+          <div className="space-y-1">
+            <label className="block text-xs text-slate-400">Email</label>
             <input
-              id="email"
               type="email"
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={email}
-              autoComplete="email"
-              onChange={(e) => setEmail(e.target.value)}
               required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:border-emerald-400"
             />
           </div>
 
-          <div>
-            <label className="block text-sm mb-1" htmlFor="password">
-              Password
-            </label>
+          <div className="space-y-1">
+            <label className="block text-xs text-slate-400">Password</label>
             <input
-              id="password"
               type="password"
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={password}
-              autoComplete={
-                mode === "signup" ? "new-password" : "current-password"
-              }
-              onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:border-emerald-400"
             />
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="text-[10px] text-slate-500 mt-1">
               Minimum 6 characters.
             </p>
           </div>
 
           {error && (
-            <p className="text-xs text-red-400 bg-red-950/40 border border-red-900/60 rounded-md px-2 py-1">
-              {error}
+            <p className="text-xs text-red-400 bg-red-950/40 border border-red-900/60 rounded-md px-3 py-2">
+              Firebase: {error}
             </p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-emerald-500 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed transition"
+            className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition disabled:opacity-60"
           >
             {loading
-              ? "Working..."
+              ? mode === "signup"
+                ? "Creating account…"
+                : "Signing in…"
               : mode === "signup"
               ? "Create account"
-              : "Log in"}
+              : "Sign in"}
           </button>
         </form>
       </div>
-    </div>
+    </main>
   );
 }
